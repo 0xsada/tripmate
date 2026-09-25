@@ -43,10 +43,6 @@ The AI algorithms analyze user preferences and travel history to suggest destina
 License
 This project is licensed under the MIT License - see the LICENSE.SKM file for details.
 
-## 📧 contact
-
-For any inquiries, please reach out to shubhamkumarmurmu@gmail.com
-or contact via WhatsApp at +917281972425
 
 ##  🚀  Run Locally
 
