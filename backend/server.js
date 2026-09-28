@@ -48,7 +48,7 @@ app.use(session({
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    service: 'AI Travel Planner API',
+    service: 'Romeio API',
     timestamp: new Date().toISOString()
   });
 });
@@ -71,7 +71,7 @@ async function startServer() {
   await initDb();
   app.listen(PORT, () => {
     console.log(`===============================================`);
-    console.log(`🚀 Travel Planner Backend running on port ${PORT}`);
+    console.log(`🚀 Romeio Backend running on port ${PORT}`);
     console.log(`📍 API endpoints:`);
     console.log(`   - Auth:     http://localhost:${PORT}/api/auth`);
     console.log(`   - Trips:    http://localhost:${PORT}/api/trips`);

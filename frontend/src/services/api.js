@@ -24,8 +24,9 @@ export const api = {
     }
   },
 
-  async googleLogin(credential) {
-    const response = await client.post('/api/auth/google', { credential });
+  async googleLogin(authData) {
+    const payload = typeof authData === 'string' ? { credential: authData } : authData;
+    const response = await client.post('/api/auth/google', payload);
     return response.data;
   },
 

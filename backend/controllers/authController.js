@@ -1,4 +1,5 @@
 const { OAuth2Client } = require('google-auth-library');
+const axios = require('axios');
 const db = require('../db');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -66,35 +67,46 @@ async function getMe(req, res) {
 
 /**
  * POST /api/auth/google
- * Verify Google ID Token from Google Identity Services
+ * Verify Google ID Token (GIS) or OAuth2 Access Token
  */
 async function googleLogin(req, res) {
   try {
-    const { credential } = req.body;
-    if (!credential) {
-      return res.status(400).json({ error: 'Missing Google credential token' });
+    const { credential, access_token } = req.body;
+    if (!credential && !access_token) {
+      return res.status(400).json({ error: 'Missing Google credential or access token' });
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      return res.status(500).json({ error: 'GOOGLE_CLIENT_ID not configured on server' });
-    }
 
-    // Verify token with Google Auth Library
     let payload;
-    try {
-      const ticket = await client.verifyIdToken({
-        idToken: credential,
-        audience: clientId
-      });
-      payload = ticket.getPayload();
-    } catch (verifyErr) {
-      console.error('Google token verification failed:', verifyErr.message);
-      return res.status(401).json({ error: 'Invalid Google authentication token: ' + verifyErr.message });
+    if (credential) {
+      if (!clientId) {
+        return res.status(500).json({ error: 'GOOGLE_CLIENT_ID not configured on server' });
+      }
+      try {
+        const ticket = await client.verifyIdToken({
+          idToken: credential,
+          audience: clientId
+        });
+        payload = ticket.getPayload();
+      } catch (verifyErr) {
+        console.error('Google token verification failed:', verifyErr.message);
+        return res.status(401).json({ error: 'Invalid Google authentication token: ' + verifyErr.message });
+      }
+    } else if (access_token) {
+      try {
+        const googleRes = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${access_token}` }
+        });
+        payload = googleRes.data;
+      } catch (tokenErr) {
+        console.error('Google access token verification failed:', tokenErr.message);
+        return res.status(401).json({ error: 'Failed to verify Google access token with Google API' });
+      }
     }
 
     if (!payload || !payload.sub || !payload.email) {
-      return res.status(400).json({ error: 'Invalid payload from Google' });
+      return res.status(400).json({ error: 'Invalid user info received from Google' });
     }
 
     const user = await findOrCreateUser({
