@@ -2,8 +2,8 @@
   <div class="login-page">
     <div class="login-card card">
       <div class="login-header">
-        <div class="login-logo">✈️</div>
-        <h1 class="login-title">AI Travel Planner</h1>
+        <img :src="logoUrl" alt="Romeio" class="login-logo-img" />
+        <h1 class="login-title">Romeio</h1>
         <p class="login-subtitle">Plan your next trip with AI</p>
       </div>
 
@@ -58,6 +58,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../services/api';
+import logoUrl from '../assets/logo.png';
 
 const router = useRouter();
 const loading = ref(false);
@@ -164,10 +165,15 @@ async function handleDemoLogin() {
 
 .login-header {
   margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.login-logo {
-  font-size: 3rem;
+.login-logo-img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
   margin-bottom: 0.75rem;
 }
 

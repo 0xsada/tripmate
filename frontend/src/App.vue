@@ -3,8 +3,8 @@
     <!-- Main Top Navbar -->
     <header class="navbar">
       <router-link to="/dashboard" class="nav-brand">
-        <span class="brand-icon">✈️</span>
-        <span class="brand-text">AI Travel Planner</span>
+        <img :src="logoUrl" alt="Romeio" class="brand-logo" />
+        <span class="brand-text">Romeio</span>
       </router-link>
 
       <div class="nav-actions" v-if="user">
@@ -53,6 +53,7 @@
 import { ref, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import api from './services/api';
+import logoUrl from './assets/logo.png';
 
 const router = useRouter();
 const route = useRoute();

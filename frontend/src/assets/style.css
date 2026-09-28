@@ -85,6 +85,13 @@ a:hover {
   font-size: 1.1rem;
 }
 
+.nav-brand .brand-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  display: block;
+}
+
 .nav-actions {
   display: flex;
   align-items: center;
