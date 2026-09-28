@@ -3,7 +3,7 @@
     <!-- Main Top Navbar -->
     <header class="navbar">
       <router-link to="/dashboard" class="nav-brand">
-        <img :src="logoUrl" alt="Romeio" class="brand-logo" />
+        <img :src="logoUrl" alt="Roamio" class="brand-logo" />
         <span class="brand-text">Romeio</span>
       </router-link>
 
@@ -37,15 +37,7 @@
       <router-view :key="$route.fullPath" @auth-change="checkUser" />
     </main>
 
-    <!-- Footer -->
-    <footer class="app-footer">
-      <div class="footer-content">
-        <p>Built with Vue 3, Express, PostgreSQL, Google Gemini AI, and OpenStreetMap & Leaflet.</p>
-        <p class="osm-credit">
-          Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Routing via OSRM. Geocoding via Nominatim.
-        </p>
-      </div>
-    </footer>
+
   </div>
 </template>
 

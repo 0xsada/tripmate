@@ -1,5 +1,16 @@
 <template>
   <div class="login-page">
+    <video
+      ref="videoRef"
+      autoplay
+      loop
+      playsinline
+      muted
+      class="login-bg-video"
+      src="/background.mp4"
+    >
+      <source src="/background.mp4" type="video/mp4" />
+    </video>
     <div class="login-card card">
       <div class="login-header">
         <img :src="logoUrl" alt="Romeio" class="login-logo-img" />
@@ -54,21 +65,21 @@
             @click="handleDemoLogin"
             :disabled="loading"
           >
-            ⚡ Quick Demo Login (Instant Test)
+             Quick Demo Login (Instant Test)
           </button>
         </div>
 
         <div class="features-summary">
           <div class="feature-item">
-            <span class="feature-icon">✨</span>
-            <span>Gemini AI Day-by-Day Itineraries</span>
+            <span class="feature-icon"></span>
+            <span>create Day-by-Day Itineraries</span>
           </div>
           <div class="feature-item">
-            <span class="feature-icon">🗺️</span>
+            <span class="feature-icon">> <</span>
             <span>OpenStreetMap & Leaflet Interactive Maps</span>
           </div>
           <div class="feature-item">
-            <span class="feature-icon">📍</span>
+            <span class="feature-icon"></span>
             <span>Automatic Nominatim Geocoding</span>
           </div>
         </div>
@@ -87,11 +98,15 @@ const router = useRouter();
 const loading = ref(false);
 const error = ref('');
 const gisButtonRendered = ref(false);
+const videoRef = ref(null);
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 let initPollTimer = null;
 
 onMounted(async () => {
+  if (videoRef.value) {
+    videoRef.value.setAttribute('muted', '');
+  }
   // 1. Check if OAuth redirect returned access_token in URL hash
   if (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('access_token=')) {
     const hash = window.location.hash.substring(1);
@@ -338,6 +353,18 @@ async function handleDemoLogin() {
 </script>
 
 <style scoped>
+.login-bg-video,
+video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+  pointer-events: none;
+}
+
 .login-page {
   min-height: calc(100vh - 80px);
   display: flex;
@@ -347,6 +374,8 @@ async function handleDemoLogin() {
 }
 
 .login-card {
+  position: relative;
+  z-index: 1;
   max-width: 440px;
   width: 100%;
   text-align: center;

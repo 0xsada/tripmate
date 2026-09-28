@@ -4,6 +4,7 @@
       <div class="map-title-row">
         <h3 class="map-title">🗺️ Interactive Map (OpenStreetMap & Leaflet)</h3>
         <span v-if="loading" class="map-status badge badge-primary">Geocoding locations...</span>
+        <span v-else-if="displayedMarkers.length === 0 && destinationCoords" class="map-status badge badge-accent">📍 Destination centered</span>
         <span v-else class="map-status badge badge-accent">{{ displayedMarkers.length }} locations on map</span>
       </div>
       <p class="map-subtitle">
@@ -79,6 +80,10 @@ const props = defineProps({
   destination: {
     type: String,
     default: ''
+  },
+  destinationCoords: {
+    type: Object,
+    default: null
   },
   days: {
     type: Array,
@@ -230,23 +235,45 @@ async function loadAndPlotLocations() {
   allGeocodedItems.value = [];
   routeSummary.value = null;
 
+  const destLat = props.destinationCoords?.latitude ?? props.destinationCoords?.lat ?? null;
+  const destLon = props.destinationCoords?.longitude ?? props.destinationCoords?.lon ?? null;
+
+  const timeoutId = setTimeout(() => {
+    if (loading.value) {
+      console.warn('Map geocoding safeguard reached (12s). Releasing loading state.');
+      loading.value = false;
+    }
+  }, 12000);
+
   try {
     const activitiesToGeocode = normalizedActivities.value.filter(a => a && (a.location || a.name));
 
-    // If destination only
-    if (activitiesToGeocode.length === 0 && props.destination) {
-      const destGeo = await api.geocode(props.destination);
-      if (destGeo) {
-        const marker = L.marker([destGeo.latitude, destGeo.longitude], {
+    // If destination only (no activities)
+    if (activitiesToGeocode.length === 0 && (props.destination || (destLat != null && destLon != null))) {
+      let lat = destLat;
+      let lon = destLon;
+      let displayName = props.destination;
+
+      if (lat == null || lon == null) {
+        const destGeo = await api.geocode(props.destination);
+        if (destGeo) {
+          lat = destGeo.latitude;
+          lon = destGeo.longitude;
+          displayName = destGeo.display_name || props.destination;
+        }
+      }
+
+      if (lat != null && lon != null) {
+        const marker = L.marker([lat, lon], {
           icon: createNumberedIcon('★', '#4f46e5')
         }).bindPopup(`
           <div class="custom-map-popup">
-            <h4>${props.destination}</h4>
-            <p>${destGeo.display_name}</p>
+            <h4>${props.destination || 'Destination'}</h4>
+            <p>${displayName}</p>
           </div>
         `);
         markersLayer.addLayer(marker);
-        map.setView([destGeo.latitude, destGeo.longitude], 12);
+        map.setView([lat, lon], 12);
       }
       loading.value = false;
       return;
@@ -258,7 +285,7 @@ async function loadAndPlotLocations() {
 
     const geocodedList = [];
 
-    activitiesToGeocode.forEach((activity, idx) => {
+    activitiesToGeocode.forEach((activity) => {
       const query = activity.location || `${activity.name}, ${props.destination}`;
       let geo = geocodeResults[query];
 
@@ -266,9 +293,10 @@ async function loadAndPlotLocations() {
         geo = geocodeResults[props.destination];
       }
 
-      if (geo && geo.latitude && geo.longitude) {
-        const lat = geo.latitude;
-        const lon = geo.longitude;
+      const lat = geo?.latitude;
+      const lon = geo?.longitude;
+
+      if (lat != null && lon != null) {
         const dayColor = getDayColor(activity.dayNumber);
         const displayLabel = `D${activity.dayNumber}.${activity.dayIndex}`;
 
@@ -305,12 +333,27 @@ async function loadAndPlotLocations() {
 
     allGeocodedItems.value = geocodedList;
 
-    // Render markers based on current selectedDay
-    renderActiveLayer();
+    // Fallback: If no activity markers could be plotted, but we have destination coordinates, plot the destination center
+    if (geocodedList.length === 0 && destLat != null && destLon != null) {
+      const destMarker = L.marker([destLat, destLon], {
+        icon: createNumberedIcon('★', '#4f46e5')
+      }).bindPopup(`
+        <div class="custom-map-popup">
+          <h4>${props.destination || 'Destination'}</h4>
+          <p>Destination center</p>
+        </div>
+      `);
+      markersLayer.addLayer(destMarker);
+      map.setView([destLat, destLon], 12);
+    } else {
+      // Render markers based on current selectedDay
+      renderActiveLayer();
+    }
 
   } catch (error) {
     console.error('Error plotting map locations:', error);
   } finally {
+    clearTimeout(timeoutId);
     loading.value = false;
     map?.invalidateSize();
   }
@@ -414,7 +457,7 @@ onMounted(() => {
 });
 
 watch(
-  () => [props.days, props.activities, props.destination],
+  () => [props.days, props.activities, props.destination, props.destinationCoords],
   () => {
     nextTick(() => {
       loadAndPlotLocations();

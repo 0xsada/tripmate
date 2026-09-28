@@ -9,42 +9,81 @@ async function generateItinerary(req, res) {
   try {
     const {
       destination,
+      destinationData,
       days,
       startDate,
       endDate,
+      travelers,
       budget,
       travelStyle,
       interests,
       additionalPreferences
     } = req.body;
 
-    if (!destination || !destination.trim()) {
+    // Destination validation
+    if (!destination || (typeof destination === 'string' && !destination.trim())) {
       return res.status(400).json({ error: 'Destination is required' });
+    }
+
+    // Dates validation
+    if (!startDate) {
+      return res.status(400).json({ error: 'Start date is required' });
+    }
+    if (!endDate) {
+      return res.status(400).json({ error: 'End date is required' });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime())) {
+      return res.status(400).json({ error: 'Valid start date is required' });
+    }
+    if (isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'Valid end date is required' });
+    }
+    if (end < start) {
+      return res.status(400).json({ error: 'End date cannot be before start date' });
+    }
+
+    // Travelers validation
+    const numTravelers = parseInt(travelers, 10);
+    if (!numTravelers || isNaN(numTravelers) || numTravelers < 1) {
+      return res.status(400).json({ error: 'Number of travelers must be at least 1' });
+    }
+
+    // Budget validation
+    if (!budget || (typeof budget === 'string' && !budget.trim())) {
+      return res.status(400).json({ error: 'Please enter your budget' });
+    }
+
+    // Interests validation
+    if (!interests || (typeof interests === 'string' && !interests.trim())) {
+      return res.status(400).json({ error: 'Please enter your travel interests' });
     }
 
     // Determine number of days
     let numDays = parseInt(days, 10);
     if (!numDays || isNaN(numDays)) {
-      if (startDate && endDate) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const diffTime = Math.abs(end - start);
-        numDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
-      } else {
-        numDays = 3;
-      }
+      const diffTime = Math.abs(end - start);
+      numDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
     }
+
+    const destString = typeof destination === 'string' 
+      ? destination.trim() 
+      : (destination.formatted || destination.name || 'Destination');
 
     // Call Gemini Service
     const itinerary = await gemini.generateTripItinerary({
-      destination: destination.trim(),
+      destination: destString,
+      destinationData: destinationData || (typeof destination === 'object' ? destination : null),
       days: numDays,
       startDate,
       endDate,
-      budget,
-      travelStyle,
-      interests,
-      additionalPreferences
+      travelers: numTravelers,
+      budget: typeof budget === 'string' ? budget.trim() : String(budget),
+      travelStyle: travelStyle || 'Balanced',
+      interests: typeof interests === 'string' ? interests.trim() : String(interests),
+      additionalPreferences: additionalPreferences || ''
     });
 
     res.json({
@@ -67,6 +106,7 @@ async function createTrip(req, res) {
     const {
       title,
       destination,
+      destinationData,
       startDate,
       endDate,
       preferences,
@@ -77,7 +117,18 @@ async function createTrip(req, res) {
       return res.status(400).json({ error: 'Destination and itinerary are required to save a trip' });
     }
 
-    const tripTitle = title && title.trim() ? title.trim() : `${destination} Trip`;
+    const destName = typeof destination === 'string' 
+      ? destination.trim() 
+      : (destination.formatted || destination.name || 'Trip');
+
+    const tripTitle = title && title.trim() ? title.trim() : `${destName} Trip`;
+
+    const tripPreferences = preferences ? { ...preferences } : {};
+    if (destinationData) {
+      tripPreferences.destinationData = destinationData;
+    } else if (typeof destination === 'object' && destination !== null) {
+      tripPreferences.destinationData = destination;
+    }
 
     const result = await db.query(
       `INSERT INTO trips (user_id, title, destination, start_date, end_date, preferences, itinerary)
@@ -86,10 +137,10 @@ async function createTrip(req, res) {
       [
         userId,
         tripTitle,
-        destination,
+        destName,
         startDate || null,
         endDate || null,
-        preferences ? JSON.stringify(preferences) : null,
+        JSON.stringify(tripPreferences),
         JSON.stringify(itinerary)
       ]
     );

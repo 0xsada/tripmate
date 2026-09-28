@@ -8,11 +8,13 @@ function sleep(ms) {
 /**
  * Generate structured travel itinerary using Google Gemini API
  * @param {Object} params
- * @param {string} params.destination - e.g. "Manali"
+ * @param {string|Object} params.destination - Destination string or structured place object
+ * @param {Object} [params.destinationData] - Structured place object { name, city, state, country, latitude, longitude }
  * @param {number|string} params.days - Number of days or duration
- * @param {string} [params.startDate] - e.g. "2025-06-01"
- * @param {string} [params.endDate] - e.g. "2025-06-05"
- * @param {string} [params.budget] - e.g. "₹15,000" or "Moderate"
+ * @param {string} [params.startDate] - e.g. "2026-10-01"
+ * @param {string} [params.endDate] - e.g. "2026-10-05"
+ * @param {number|string} [params.travelers] - Number of travelers
+ * @param {string} [params.budget] - e.g. "₹15,000" or "$1,200"
  * @param {string} [params.travelStyle] - e.g. "Adventure", "Relaxed", "Cultural"
  * @param {string} [params.interests] - e.g. "Nature, Photography, Local Food"
  * @param {string} [params.additionalPreferences] - e.g. "Vegetarian food, pet friendly"
@@ -20,9 +22,11 @@ function sleep(ms) {
  */
 async function generateTripItinerary({
   destination,
+  destinationData = null,
   days = 3,
   startDate = '',
   endDate = '',
+  travelers = 1,
   budget = '',
   travelStyle = 'Balanced',
   interests = 'Sightseeing, Local Culture',
@@ -33,28 +37,61 @@ async function generateTripItinerary({
     throw new Error('GEMINI_API_KEY is not configured in backend environment variables.');
   }
 
+  // Extract structured destination context
+  const destObj = destinationData || (typeof destination === 'object' && destination !== null ? destination : null);
+  const destName = destObj?.formatted || (typeof destination === 'string' ? destination : destObj?.name || 'Destination');
+  const destCity = destObj?.city || destObj?.name || destName;
+  const destCountry = destObj?.country || '';
+  const destState = destObj?.state || '';
+  const destCoords = destObj?.latitude && destObj?.longitude 
+    ? `Latitude: ${destObj.latitude}, Longitude: ${destObj.longitude}` 
+    : '';
+
+  const destinationDetails = [
+    `- Destination: ${destName}`,
+    destCity ? `- City: ${destCity}` : '',
+    destState ? `- State/Region: ${destState}` : '',
+    destCountry ? `- Country: ${destCountry}` : '',
+    destCoords ? `- Geographic Coordinates: ${destCoords}` : ''
+  ].filter(Boolean).join('\n');
+
   const prompt = `
 You are an expert AI Travel Planner.
-Create a detailed, realistic, day-by-day travel itinerary for a trip with the following details:
+Create a detailed, realistic, day-by-day travel itinerary for a verified real-world trip with the following details:
 
-- Destination: ${destination}
+${destinationDetails}
 - Duration: ${days} day(s) ${startDate && endDate ? `(From ${startDate} to ${endDate})` : ''}
+- Number of Travelers: ${travelers || 1} traveler(s)
 - Budget: ${budget || 'Flexible'}
 - Travel Style: ${travelStyle || 'Balanced'}
 - Interests: ${interests || 'General sightseeing, culture, nature'}
 - Additional Preferences: ${additionalPreferences || 'None'}
 
-IMPORTANT REQUIREMENTS:
-1. Provide realistic activities for each day with accurate, real-world landmark/location names suitable for OpenStreetMap / Nominatim geocoding (e.g. "Solang Valley, Himachal Pradesh", "Hadimba Temple, Manali", "Mall Road, Manali").
-2. Include short, engaging activity descriptions.
-3. Return pure JSON ONLY. Do NOT include markdown code blocks, do NOT include HTML, and do NOT include any commentary outside the JSON.
+CRITICAL ACCURACY & GEOCODING REQUIREMENTS:
+1. REAL PLACES ONLY:
+   - Generate REAL, verified places whenever possible.
+   - Do NOT invent, fabricate, or hallucinate attractions, restaurants, landmarks, hotels, streets, parks, or geographic locations.
+   - Every single attraction, landmark, or activity MUST genuinely exist in or around ${destCity}${destCountry ? `, ${destCountry}` : ''}.
+   - Prefer well-known, established places that exist in the selected destination.
+
+2. STRUCTURED LOCATION STRINGS FOR MAP GEOCODING:
+   - For the "location" field of each activity, return an exact, structured landmark/venue name along with the city and region (e.g. "Eiffel Tower, Champ de Mars, Paris, France" or "Hadimba Devi Temple, Old Manali, Himachal Pradesh, India").
+   - Do NOT return vague descriptions like "Local Cafe", "City Center", or "Scenic Viewpoint". Use specific named locations suitable for OpenStreetMap / Nominatim geocoding.
+
+3. LOGICAL DAILY SCHEDULING:
+   - Group each day's activities in close geographic proximity so travelers do not waste time commuting back and forth.
+   - Tailor the pacing realistically for ${travelers || 1} traveler(s) with an estimated budget of ${budget || 'Flexible'}.
+
+4. PURE JSON OUTPUT:
+   - Return pure JSON ONLY. Do NOT include markdown code blocks, do NOT include HTML, and do NOT include any commentary outside the JSON.
 
 Expected JSON format:
 {
-  "destination": "${destination}",
+  "destination": "${destName}",
   "summary": "A concise summary of the trip highlights and experience",
   "estimated_budget": "${budget || 'Moderate'}",
   "travel_style": "${travelStyle || 'Balanced'}",
+  "travelers": ${travelers || 1},
   "days": [
     {
       "day": 1,
@@ -178,8 +215,8 @@ function validateItinerary(data) {
     throw new Error('Invalid itinerary format: Expected a JSON object');
   }
 
-  if (!data.destination || typeof data.destination !== 'string') {
-    throw new Error('Invalid itinerary format: Missing or invalid "destination" string');
+  if (!data.destination || (typeof data.destination !== 'string' && typeof data.destination !== 'object')) {
+    throw new Error('Invalid itinerary format: Missing or invalid "destination"');
   }
 
   if (!Array.isArray(data.days) || data.days.length === 0) {

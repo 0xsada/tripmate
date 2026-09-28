@@ -8,3 +8,6 @@ frontend/dist/
 .DS_Store
 .vscode/
 INSTALLATION_REPORT.txt
+backend/.env.example
+frontend/.env.example
+frontend/public/background.mp4

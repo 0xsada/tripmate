@@ -47,6 +47,10 @@
             <span class="meta-icon">📅</span>
             <strong>Dates:</strong> {{ formatDate(trip.start_date) }} <span v-if="trip.end_date">to {{ formatDate(trip.end_date) }}</span>
           </div>
+          <div class="meta-item" v-if="trip.preferences?.travelers">
+            <span class="meta-icon">👥</span>
+            <strong>Travelers:</strong> {{ trip.preferences.travelers }}
+          </div>
           <div class="meta-item" v-if="trip.preferences?.interests">
             <span class="meta-icon">🎯</span>
             <strong>Interests:</strong> {{ trip.preferences.interests }}
@@ -133,6 +137,7 @@
             <TravelMap 
               ref="travelMapRef"
               :destination="trip.destination" 
+              :destinationCoords="trip.preferences?.destinationData"
               :days="trip.itinerary?.days"
               :activities="allActivities" 
               :title="`${trip.destination} Map`" 

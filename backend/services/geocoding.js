@@ -22,6 +22,43 @@ async function rateLimitedRequest(fn) {
 }
 
 /**
+ * Geocode via Geoapify Search API (fast, reliable, free tier)
+ */
+async function geocodeViaGeoapify(query) {
+  const apiKey = process.env.GEOAPIFY_API_KEY || process.env.VITE_GEOAPIFY_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const response = await axios.get('https://api.geoapify.com/v1/geocode/search', {
+      params: {
+        text: query.trim(),
+        limit: 1,
+        apiKey
+      },
+      timeout: 5000
+    });
+
+    const feat = response.data?.features?.[0];
+    if (feat) {
+      const p = feat.properties || {};
+      const coords = feat.geometry?.coordinates || [];
+      const lat = p.lat ?? (coords.length >= 2 ? coords[1] : null);
+      const lon = p.lon ?? (coords.length >= 2 ? coords[0] : null);
+      if (lat != null && lon != null) {
+        return {
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lon),
+          display_name: p.formatted || [p.name, p.city, p.country].filter(Boolean).join(', ')
+        };
+      }
+    }
+  } catch (err) {
+    console.warn(`Geoapify geocoding notice for "${query}":`, err.message);
+  }
+  return null;
+}
+
+/**
  * Geocode via OpenStreetMap Photon API (fast, high-availability OSM geocoder)
  */
 async function geocodeViaPhoton(query) {
@@ -34,7 +71,7 @@ async function geocodeViaPhoton(query) {
       headers: {
         'User-Agent': 'TravelPlannerApp/1.0 (student-portfolio)'
       },
-      timeout: 8000
+      timeout: 5000
     });
 
     if (response.data?.features && response.data.features.length > 0) {
@@ -58,7 +95,7 @@ async function geocodeViaPhoton(query) {
 }
 
 /**
- * Geocode a query string using OpenStreetMap Nominatim with Photon fallback
+ * Geocode a query string using Geoapify / OpenStreetMap Nominatim with Photon fallback
  * @param {string} query - Location to search
  * @returns {Promise<Object|null>} { latitude, longitude, display_name }
  */
@@ -76,43 +113,48 @@ async function geocodeLocation(query) {
 
   let result = null;
 
-  // 1. Try Nominatim first
-  try {
-    result = await rateLimitedRequest(async () => {
-      const response = await axios.get('https://nominatim.openstreetmap.org/search', {
-        params: {
-          q: query.trim(),
-          format: 'json',
-          addressdetails: 1,
-          limit: 1
-        },
-        headers: {
-          'User-Agent': 'TravelPlannerApp-StudentPortfolio/1.0 (contact: travelplanner.app.dev@gmail.com)'
-        },
-        timeout: 8000
-      });
+  // 1. Try Geoapify first if API key configured (fastest, most reliable)
+  result = await geocodeViaGeoapify(query);
 
-      if (response.data && response.data.length > 0) {
-        const item = response.data[0];
-        return {
-          latitude: parseFloat(item.lat),
-          longitude: parseFloat(item.lon),
-          display_name: item.display_name
-        };
-      }
-      return null;
-    });
-  } catch (error) {
-    const status = error.response?.status;
-    console.warn(`Nominatim geocoding notice for "${query}" (status: ${status || error.message}). Trying fallback OpenStreetMap service...`);
+  // 2. Try Nominatim if Geoapify didn't return a result
+  if (!result) {
+    try {
+      result = await rateLimitedRequest(async () => {
+        const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+          params: {
+            q: query.trim(),
+            format: 'json',
+            addressdetails: 1,
+            limit: 1
+          },
+          headers: {
+            'User-Agent': 'TravelPlannerApp-StudentPortfolio/1.0 (contact: travelplanner.app.dev@gmail.com)'
+          },
+          timeout: 5000
+        });
+
+        if (response.data && response.data.length > 0) {
+          const item = response.data[0];
+          return {
+            latitude: parseFloat(item.lat),
+            longitude: parseFloat(item.lon),
+            display_name: item.display_name
+          };
+        }
+        return null;
+      });
+    } catch (error) {
+      const status = error.response?.status;
+      console.warn(`Nominatim geocoding notice for "${query}" (status: ${status || error.message}). Trying fallback OpenStreetMap service...`);
+    }
   }
 
-  // 2. Fallback to OpenStreetMap Photon if Nominatim was rate-limited or yielded no result
+  // 3. Fallback to OpenStreetMap Photon
   if (!result) {
     result = await geocodeViaPhoton(query);
   }
 
-  // 3. If still no result and contains commas, try broader landmark/city
+  // 4. If still no result and contains commas, try broader landmark/city
   if (!result && query.includes(',')) {
     const parts = query.split(',');
     const simplifiedQuery = parts.slice(0, 2).join(',').trim();
@@ -132,17 +174,30 @@ async function geocodeLocation(query) {
 /**
  * Batch geocode multiple locations with caching and rate limiting
  * @param {string[]} locations
- * @returns {Promise<Object[]>}
+ * @returns {Promise<Object>} Map of location queries to geocoded objects
  */
 async function batchGeocodeLocations(locations) {
   const results = {};
-  for (const loc of locations) {
-    if (!loc) continue;
-    const geo = await geocodeLocation(loc);
-    if (geo) {
-      results[loc] = geo;
-    }
+  const uniqueLocations = [...new Set(locations.filter(Boolean))];
+
+  // Process in small batches of 3 to speed up resolution while respecting limits
+  const batchSize = 3;
+  for (let i = 0; i < uniqueLocations.length; i += batchSize) {
+    const chunk = uniqueLocations.slice(i, i + batchSize);
+    await Promise.all(
+      chunk.map(async (loc) => {
+        try {
+          const geo = await geocodeLocation(loc);
+          if (geo) {
+            results[loc] = geo;
+          }
+        } catch (err) {
+          console.warn(`Geocoding error for location "${loc}":`, err.message);
+        }
+      })
+    );
   }
+
   return results;
 }
 

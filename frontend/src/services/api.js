@@ -66,7 +66,69 @@ export const api = {
     return response.data;
   },
 
-  // Geocoding & Routing (Proxied through backend)
+  // Geocoding & Routing (Proxied through backend or direct Geoapify)
+  async autocomplete(text, { signal = null, type = 'city', limit = 6 } = {}) {
+    if (!text || text.trim().length < 2) {
+      return [];
+    }
+
+    const geoapifyKey = import.meta.env.VITE_GEOAPIFY_API_KEY;
+
+    // 1. Try backend proxy first
+    try {
+      const response = await client.get('/api/autocomplete', {
+        params: { text: text.trim(), type, limit },
+        signal
+      });
+      if (response.data && Array.isArray(response.data.results)) {
+        return response.data.results;
+      }
+    } catch (err) {
+      if (axios.isCancel(err) || err.name === 'CanceledError' || err.name === 'AbortError') {
+        throw err; // Propagate cancellation to debounce handler
+      }
+      console.warn('Backend autocomplete proxy notice, trying direct client lookup:', err.message);
+    }
+
+    // 2. Direct Geoapify fallback if backend proxy failed and frontend key exists
+    if (geoapifyKey) {
+      try {
+        const response = await axios.get('https://api.geoapify.com/v1/geocode/autocomplete', {
+          params: {
+            text: text.trim(),
+            type,
+            apiKey: geoapifyKey,
+            limit
+          },
+          signal
+        });
+        const features = response.data?.features || [];
+        return features.map((f) => {
+          const p = f.properties || {};
+          const coords = f.geometry?.coordinates || [];
+          return {
+            name: p.name || p.city || p.formatted || '',
+            city: p.city || p.name || '',
+            state: p.state || '',
+            country: p.country || '',
+            countryCode: p.country_code || '',
+            latitude: p.lat ?? (coords.length >= 2 ? coords[1] : null),
+            longitude: p.lon ?? (coords.length >= 2 ? coords[0] : null),
+            formatted: p.formatted || [p.name, p.state, p.country].filter(Boolean).join(', '),
+            placeId: p.place_id || ''
+          };
+        });
+      } catch (directErr) {
+        if (axios.isCancel(directErr) || directErr.name === 'CanceledError' || directErr.name === 'AbortError') {
+          throw directErr;
+        }
+        console.error('Direct Geoapify autocomplete failed:', directErr.message);
+      }
+    }
+
+    return [];
+  },
+
   async geocode(query) {
     try {
       const response = await client.get('/api/geocode', {
