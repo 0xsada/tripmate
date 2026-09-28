@@ -1,7 +1,6 @@
-# ✈️ AI Travel Planner
 
-A full-stack AI itinerary generator and route visualizer using 100% open-source mapping.
-
+A full-stack AI itinerary generator and route visualizer using 100% open-source mapping
+   
 ---
 
 ## 💡 Why This Project Was Created
