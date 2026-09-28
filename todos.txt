@@ -1,0 +1,5 @@
+1. budget freindly hotel recommendations
+2. make them available local tourist guides
+3. pricing model for more trip generations
+4. make it more user friendly
+
